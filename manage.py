@@ -15,7 +15,7 @@ from docopt import docopt
 import donkeycar as dk 
 
 
-def drive(model_path=None):
+def drive(cfg, model_path=None):
     #Initialized car
     V = dk.vehicle.Vehicle()
     cam = dk.parts.PiCamera(resolution=cfg.CAMERA_RESOLUTION)
