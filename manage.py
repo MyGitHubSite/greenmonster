@@ -13,6 +13,9 @@ Usage:
 import os
 from docopt import docopt
 import donkeycar as dk 
+import RPi.GPIO as GPIO
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(17, GPIO.OUT)
 
 
 def drive(cfg, model_path=None):
@@ -32,7 +35,17 @@ def drive(cfg, model_path=None):
           inputs=['cam/image_array'],
           outputs=['user/angle', 'user/throttle', 'user/mode', 'recording', 'brake'],
           threaded=True)
-    
+
+    #LED indicator for recording
+    def recording_indicator(recording):
+        if recording:
+            GPIO.output(17,GPIO.HIGH)
+        else:
+            GPIO.output(17,GPIO.LOW)
+
+    recording_indicator_part = dk.parts.Lambda(recording_indicator)
+    V.add(recording_indicator_part, inputs=['recording'])
+        
     #See if we should even run the pilot module. 
     #This is only needed because the part run_contion only accepts boolean
     def pilot_condition(mode):
