@@ -13,10 +13,6 @@ Usage:
 import os
 from docopt import docopt
 import donkeycar as dk 
-import RPi.GPIO as GPIO
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(17, GPIO.OUT)
-
 
 def drive(cfg, model_path=None):
     #Initialized car
@@ -38,6 +34,10 @@ def drive(cfg, model_path=None):
 
     #LED indicator for recording
     def recording_indicator(recording):
+        import RPi.GPIO as GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(17, GPIO.OUT)
+
         if recording:
             GPIO.output(17,GPIO.HIGH)
         else:
