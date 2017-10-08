@@ -3,29 +3,42 @@
 Scripts to drive a donkey 2 car and train a model for it. 
 
 Usage:
-    manage.py (drive) [--model=<model>]
+    manage.py (drive) [--model=<model>] [--js]
     manage.py (train) [--tub=<tub1,tub2,..tubn>] (--model=<model>)
     manage.py (calibrate)
     manage.py (check) [--tub=<tub1,tub2,..tubn>] [--fix]
+    manage.py (analyze) [--tub=<tub1,tub2,..tubn>] [--op=histogram] [--rec=<record>]
+    manage.py (plot_predictions) [--tub=<tub1,tub2,..tubn>] (--model=<model>)
+
+    Options:
+    -h --help     Show this screen.
+    --js          Use physical joystick.
+    --fix         Remove records which cause problems.
+
 """
 
 
 import os
 from docopt import docopt
-import donkeycar as dk 
+import donkeycar as dk
 
-def drive(cfg, model_path=None):
+def drive(cfg, model_path=None, use_joystick=False):
     #Initialized car
     V = dk.vehicle.Vehicle()
     cam = dk.parts.PiCamera(resolution=cfg.CAMERA_RESOLUTION)
     V.add(cam, outputs=['cam/image_array'], threaded=True)
     
-    #Joystick pilot below is an alternative controller.
-    #Comment out the above ctr= and enable the below ctr= to switch.
-    #modify max_throttle closer to 1.0 to have more power
-    #modify steering_scale lower than 1.0 to have less responsive steering
-    ctr = dk.parts.JoystickPilot(max_throttle=cfg.JOYSTICK_MAX_THROTTLE,
-                                 steering_scale=cfg.JOYSTICK_STEERING_SCALE)
+
+    if use_joystick or cfg.USE_JOYSTICK_AS_DEFAULT:
+        #modify max_throttle closer to 1.0 to have more power
+        #modify steering_scale lower than 1.0 to have less responsive steering
+        ctr = dk.parts.JoystickController(max_throttle=cfg.JOYSTICK_MAX_THROTTLE,
+                                    steering_scale=cfg.JOYSTICK_STEERING_SCALE,
+                                    auto_record_on_throttle=cfg.AUTO_RECORD_ON_THROTTLE)
+    else:        
+        #This web controller will create a web server that is capable
+        #of managing steering, throttle, and modes, and more.
+        ctr = dk.parts.LocalWebController()
 
     V.add(ctr, 
           inputs=['cam/image_array'],
@@ -33,17 +46,7 @@ def drive(cfg, model_path=None):
           threaded=True)
 
     #LED indicator for recording
-    def recording_indicator(recording):
-        import RPi.GPIO as GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(17, GPIO.OUT)
-
-        if recording:
-            GPIO.output(17,GPIO.HIGH)
-        else:
-            GPIO.output(17,GPIO.LOW)
-
-    recording_indicator_part = dk.parts.Lambda(recording_indicator)
+    recording_indicator_part = dk.parts.GPIOPinOutput(cfg.RECORDING_LED)
     V.add(recording_indicator_part, inputs=['recording'])
         
     #See if we should even run the pilot module. 
@@ -142,7 +145,8 @@ def drive(cfg, model_path=None):
 
     steering_controller = dk.parts.PCA9685(cfg.STEERING_CHANNEL)
     steering = dk.parts.PWMSteering(controller=steering_controller,
-                                    left_pulse=cfg.STEERING_LEFT_PWM, right_pulse=cfg.STEERING_RIGHT_PWM)
+                                    left_pulse=cfg.STEERING_LEFT_PWM, 
+                                    right_pulse=cfg.STEERING_RIGHT_PWM)
     
     throttle_controller = dk.parts.PCA9685(0)
     throttle = dk.parts.PWMThrottle(controller=throttle_controller,
@@ -190,10 +194,43 @@ def drive(cfg, model_path=None):
     V.start(rate_hz=cfg.DRIVE_LOOP_HZ, 
             max_loop_count=None)
 
+    print("You can now go to <your pi ip address>:8887 to drive your car.")
+
+
+def expand_path_masks(paths):
+    '''
+    take a list of paths and expand any wildcards
+    returns a new list of paths fully expanded
+    '''
+    import glob
+    expanded_paths = []
+    for path in paths:
+        if '*' in path or '?' in path:
+            mask_paths = glob.glob(path)
+            expanded_paths += mask_paths
+        else:
+            expanded_paths.append(path)
+
+    return expanded_paths
+
+
+def gather_tubs(cfg, tub_names):
+    
+    if tub_names:
+        tub_paths = [os.path.expanduser(n) for n in tub_names.split(',')]
+        tub_paths = expand_path_masks(tub_paths)
+    else:
+        tub_paths = [os.path.join(cfg.DATA_PATH, n) for n in os.listdir(cfg.DATA_PATH)]
+
+    tubs = [dk.parts.Tub(p) for p in tub_paths]
+    return tubs
 
 
 def train(cfg, tub_names, model_name):
-    
+    '''
+    use the specified data in tub_names to train an artifical neural network
+    saves the output trained model as model_name
+    '''
     X_keys = ['cam/image_array']
     y_keys = ['user/angle', 'measured_throttle']
     
@@ -203,23 +240,49 @@ def train(cfg, tub_names, model_name):
 
     kl = dk.parts.KerasCategorical()
     
-    if tub_names:
-        tub_paths = [os.path.join(cfg.DATA_PATH, n) for n in tub_names.split(',')]
-    else:
-        tub_paths = [os.path.join(cfg.DATA_PATH, n) for n in os.listdir(cfg.DATA_PATH)]
-    tubs = [dk.parts.Tub(p) for p in tub_paths]
+    tubs = gather_tubs(cfg, tub_names)
 
     import itertools
 
     gens = [tub.train_val_gen(X_keys, y_keys, record_transform=rt, batch_size=cfg.BATCH_SIZE, train_split=cfg.TRAIN_TEST_SPLIT) for tub in tubs]
 
+    #calculate class weights for steering
+    # from sklearn.utils.class_weight import compute_class_weight
+    # import numpy as np
+
+    # binned_angles = []
+    # for tub in tubs:
+    #     num_records = tub.get_num_records()
+    #     for iRec in range(0, num_records):
+    #         json_data = tub.get_json_record(iRec)
+    #         binned_angle = dk.utils.linear_bin(json_data['user/angle'])
+    #         binned_angles.append(binned_angle)
+
+    # binned_angles = np.array(binned_angles)
+    # steering_class_weights = compute_class_weight('balanced', np.unique(binned_angles), binned_angles)
+    # print(steering_class_weights)
+    # pdb.set_trace()
+
+    # #calculate class weights for throttle
+    # from sklearn.utils.class_weight import compute_class_weight
+    # throttles = []
+    # for tub in tubs:
+    #     num_records = tub.get_num_records()
+    #     for iRec in range(0, num_records):
+    #         json_data = tub.get_json_record(iRec)
+    #         throttle = float(json_data['measured_throttle'])
+    #         throttles.append(throttle)
+
+    # throttle_class_weights = compute_class_weight('balanced', np.unique(throttles), throttles)
+    # print(throttle_class_weights)
+    # pdb.set_trace()
 
     # Training data generator is the one that keeps cycling through training data generator of all tubs chained together
     # The same for validation generator
     train_gens = itertools.cycle(itertools.chain(*[gen[0] for gen in gens]))
     val_gens = itertools.cycle(itertools.chain(*[gen[1] for gen in gens]))
 
-    model_path = os.path.join(cfg.MODELS_PATH, model_name)
+    model_path = os.path.expanduser(model_name)
 
     total_records = sum([t.get_num_records() for t in tubs])
     total_train = int(total_records * cfg.TRAIN_TEST_SPLIT)
@@ -248,22 +311,76 @@ def check(cfg, tub_names, fix=False):
     Check for any problems. Looks at tubs and find problems in any records or images that won't open.
     If fix is True, then delete images and records that cause problems.
     '''
-    if tub_names:
-        tub_paths = [os.path.join(cfg.DATA_PATH, n) for n in tub_names.split(',')]
-    else:
-        tub_paths = [os.path.join(cfg.DATA_PATH, n) for n in os.listdir(cfg.DATA_PATH)]
+    tubs = gather_tubs(cfg, tub_names)
 
-    tubs = [dk.parts.Tub(p) for p in tub_paths]
+    for tub in tubs:
+        tub.check(fix=fix)
 
-    for t in tubs:
-        tubs.check(fix=fix)
+def anaylze(cfg, tub_names, op, record):
+    '''
+    look at the tub data and produce some analysis, for example:
+    manage.py analyze --tub=<tub1,tub2,..tubn> --op=histogram --rec="user/angle"
+    '''
+    tubs = gather_tubs(cfg, tub_names)
+
+    if op == 'histogram':
+        import matplotlib.pyplot as plt
+        samples = []
+        for tub in tubs:
+            num_records = tub.get_num_records()
+            for iRec in range(0, num_records):
+                json_data = tub.get_json_record(iRec)
+                sample = json_data[record]
+                samples.append(float(sample))
+
+        plt.hist(samples, 50)
+        plt.xlabel(record)
+        plt.show()
+
+def plot_predictions(cfg, tub_names, model_name):
+    '''
+    plot model predictions against data from tubs
+
+    '''
+    import matplotlib.pyplot as plt
+    import pandas as pd
+
+    tubs = gather_tubs(cfg, tub_names)
+    
+    model_path = os.path.expanduser(model_name)
+    model = dk.parts.KerasCategorical()
+    model.load(model_path)
+
+    user_angles = []
+    user_throttles = []
+    pilot_angles = []
+    pilot_throttles = []
+
+    for tub in tubs:
+        num_records = tub.get_num_records()
+        for iRec in range(0, num_records):
+            record = tub.get_record(iRec)
+            
+            img = record["cam/image_array"]    
+            user_angle = float(record["user/angle"])
+            user_throttle = float(record["measured_throttle"])
+            pilot_angle, pilot_throttle = model.run(img)
+
+            user_angles.append(user_angle)
+            user_throttles.append(user_throttle)
+            pilot_angles.append(pilot_angle)
+            pilot_throttles.append(pilot_throttle)
+
+    pd.DataFrame({'actual': user_angles, 'predicted': pilot_angles}).plot()
+    plt.show()
+
 
 if __name__ == '__main__':
     args = docopt(__doc__)
     cfg = dk.load_config()
     
     if args['drive']:
-        drive(cfg, model_path = args['--model'])
+        drive(cfg, model_path = args['--model'], use_joystick=args['--js'])
     
     elif args['calibrate']:
         calibrate()
@@ -277,6 +394,17 @@ if __name__ == '__main__':
         tub = args['--tub']
         fix = args['--fix']
         check(cfg, tub, fix)
+
+    elif args['analyze']:
+        tub = args['--tub']
+        op = args['--op']
+        rec = args['--rec']
+        anaylze(cfg, tub, op, rec)
+
+    elif args['plot_predictions']:
+        tub = args['--tub']
+        model = args['--model']
+        plot_predictions(cfg, tub, model)
 
 
 
