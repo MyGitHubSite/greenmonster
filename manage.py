@@ -246,37 +246,6 @@ def train(cfg, tub_names, model_name):
 
     gens = [tub.train_val_gen(X_keys, y_keys, record_transform=rt, batch_size=cfg.BATCH_SIZE, train_split=cfg.TRAIN_TEST_SPLIT) for tub in tubs]
 
-    #calculate class weights for steering
-    # from sklearn.utils.class_weight import compute_class_weight
-    # import numpy as np
-
-    # binned_angles = []
-    # for tub in tubs:
-    #     num_records = tub.get_num_records()
-    #     for iRec in range(0, num_records):
-    #         json_data = tub.get_json_record(iRec)
-    #         binned_angle = dk.utils.linear_bin(json_data['user/angle'])
-    #         binned_angles.append(binned_angle)
-
-    # binned_angles = np.array(binned_angles)
-    # steering_class_weights = compute_class_weight('balanced', np.unique(binned_angles), binned_angles)
-    # print(steering_class_weights)
-    # pdb.set_trace()
-
-    # #calculate class weights for throttle
-    # from sklearn.utils.class_weight import compute_class_weight
-    # throttles = []
-    # for tub in tubs:
-    #     num_records = tub.get_num_records()
-    #     for iRec in range(0, num_records):
-    #         json_data = tub.get_json_record(iRec)
-    #         throttle = float(json_data['measured_throttle'])
-    #         throttles.append(throttle)
-
-    # throttle_class_weights = compute_class_weight('balanced', np.unique(throttles), throttles)
-    # print(throttle_class_weights)
-    # pdb.set_trace()
-
     # Training data generator is the one that keeps cycling through training data generator of all tubs chained together
     # The same for validation generator
     train_gens = itertools.cycle(itertools.chain(*[gen[0] for gen in gens]))
