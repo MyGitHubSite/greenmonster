@@ -9,6 +9,7 @@ Usage:
     manage.py (check) [--tub=<tub1,tub2,..tubn>] [--fix]
     manage.py (analyze) [--tub=<tub1,tub2,..tubn>] [--op=histogram] [--rec=<record>]
     manage.py (plot_predictions) [--tub=<tub1,tub2,..tubn>] (--model=<model>)
+    manage.py (custom_train) [--tub=<tub1,tub2,..tubn>] (--model=<model>)
 
     Options:
     -h --help     Show this screen.
@@ -21,6 +22,7 @@ Usage:
 import os
 from docopt import docopt
 import donkeycar as dk
+import pdb
 
 def drive(cfg, model_path=None, use_joystick=False):
     #Initialized car
@@ -232,7 +234,7 @@ def train(cfg, tub_names, model_name):
     saves the output trained model as model_name
     '''
     X_keys = ['cam/image_array']
-    y_keys = ['user/angle', 'measured_throttle']
+    y_keys = ['user/angle', 'user/throttle']
     
     def rt(record):
         record['user/angle'] = dk.utils.linear_bin(record['user/angle'])
@@ -308,11 +310,15 @@ def anaylze(cfg, tub_names, op, record):
 
 def plot_predictions(cfg, tub_names, model_name):
     '''
-    plot model predictions against data from tubs
+    Plot model predictions for angle and throttle against data from tubs.
 
     '''
     import matplotlib.pyplot as plt
     import pandas as pd
+    from PIL import Image
+    import json
+    import glob
+    import numpy as np
 
     tubs = gather_tubs(cfg, tub_names)
     
@@ -321,27 +327,164 @@ def plot_predictions(cfg, tub_names, model_name):
     model.load(model_path)
 
     user_angles = []
+    user_angles_binned = []
     user_throttles = []
     pilot_angles = []
     pilot_throttles = []
 
     for tub in tubs:
-        num_records = tub.get_num_records()
-        for iRec in range(0, num_records):
-            record = tub.get_record(iRec)
+        record_paths = glob.glob(os.path.join(tub.path, 'record_*.json'))
+
+        for record_path in record_paths:
+            with open(record_path, 'r') as fp:
+                json_data = json.load(fp)
             
-            img = record["cam/image_array"]    
-            user_angle = float(record["user/angle"])
-            user_throttle = float(record["measured_throttle"])
+            image_filename = json_data["cam/image_array"]
+            image_path = os.path.join(tub.path, image_filename)
+            img = Image.open(image_path)
+            img = np.array(img)
+
+            binned_angle = dk.utils.linear_bin(json_data['user/angle'])
+            user_angle_binned = dk.utils.linear_unbin(binned_angle)
+
+            user_angle = float(json_data["user/angle"])
+            user_throttle = float(json_data["user/throttle"])
             pilot_angle, pilot_throttle = model.run(img)
 
             user_angles.append(user_angle)
+            user_angles_binned.append(user_angle_binned)
             user_throttles.append(user_throttle)
             pilot_angles.append(pilot_angle)
             pilot_throttles.append(pilot_throttle)
 
-    pd.DataFrame({'actual': user_angles, 'predicted': pilot_angles}).plot()
+    angles_df = pd.DataFrame({'user_angle': user_angles, 'pilot_angle': pilot_angles})
+    throttles_df = pd.DataFrame({'user_throttle': user_throttles, 'pilot_throttle': pilot_throttles})
+
+    fig = plt.figure()
+
+    title = "Model Predictions\nTubs: " + tub_names + "\nModel: " + model_name
+    fig.suptitle(title)
+
+    ax1 = fig.add_subplot(211)
+    ax2 = fig.add_subplot(212)
+
+    angles_df.plot(ax=ax1)
+    throttles_df.plot(ax=ax2)
+
+    ax1.legend(loc=4)
+    ax2.legend(loc=4)
+
     plt.show()
+
+def custom_train(cfg, tub_names, model_name):
+    '''
+    use the specified data in tub_names to train an artifical neural network
+    saves the output trained model as model_name
+    '''
+    import sklearn
+    from sklearn.model_selection import train_test_split
+    from sklearn.utils import shuffle
+    import random
+    from PIL import Image
+    import numpy as np
+    import glob
+    import json
+
+    images = []
+    angles = []
+    throttles = []
+
+    tubs = gather_tubs(cfg, tub_names)
+
+    for tub in tubs:
+        record_paths = glob.glob(os.path.join(tub.path, 'record_*.json'))
+        for record_path in record_paths:
+
+            with open(record_path, 'r') as fp:
+                json_data = json.load(fp)
+
+            user_angle = dk.utils.linear_bin(json_data['user/angle'])
+            user_throttle = float(json_data["user/throttle"])
+            image_filename = json_data["cam/image_array"]
+            image_path = os.path.join(tub.path, image_filename)
+            
+            if (user_angle[7] != 1.0):
+                #if the categorical angle is not in the 0 bucket, always include it
+                images.append(image_path)
+                angles.append(user_angle)
+                throttles.append(user_throttle)
+            elif (random.randint(0, 9) < 10):
+                #Drop a percentage of records where categorical angle is in the 0 bucket
+                #increase the number in the conditional above to include more records
+                #(< 2 = 20% of 0 angle records included, < 3 = 30% of 0 angle records included, etc.)
+                images.append(image_path)
+                angles.append(user_angle)
+                throttles.append(user_throttle)
+
+    #shuffle and split the data
+    train_images, val_images, train_angles, val_angles, train_throttles, val_throttles = train_test_split(images, angles, throttles, shuffle=True, test_size=(1 - cfg.TRAIN_TEST_SPLIT))
+
+    def generator(images, angles, throttles, batch_size=cfg.BATCH_SIZE):
+        num_records = len(images)
+
+        while True:
+            #shuffle again for good measure
+            shuffle(images, angles, throttles)
+
+            for offset in range(0, num_records, batch_size):
+                batch_images = images[offset:offset+batch_size]
+                batch_angles = angles[offset:offset+batch_size]
+                batch_throttles = throttles[offset:offset+batch_size]
+
+                augmented_images = []
+                augmented_angles = []
+                augmented_throttles = []
+
+                for image_path, angle, throttle in zip(batch_images, batch_angles, batch_throttles):
+                    image = Image.open(image_path)
+                    image = np.array(image)
+                    augmented_images.append(image)
+                    augmented_angles.append(angle)
+                    augmented_throttles.append(throttle)
+
+                    if (angle[7] != 1.0):
+                        #augment the data set with flipped versions of the nonzero angle records
+                        augmented_images.append(np.fliplr(image))
+                        augmented_angles.append(np.flip(angle, axis=0))
+                        augmented_throttles.append(throttle)
+
+                augmented_images = np.array(augmented_images)
+                augmented_angles =  np.array(augmented_angles)
+                augmented_throttles = np.array(augmented_throttles)
+
+                shuffle(augmented_images, augmented_angles, augmented_throttles)
+
+                X = [augmented_images]
+                y = [augmented_angles, augmented_throttles]
+
+                yield X, y
+
+    train_gen = generator(train_images, train_angles, train_throttles)
+    val_gen = generator(val_images, val_angles, val_throttles)
+
+    kl = dk.parts.KerasCategorical()
+    
+    tubs = gather_tubs(cfg, tub_names)
+    model_path = os.path.expanduser(model_name)
+
+    total_records = len(images)
+    total_train = len(train_images)
+    total_val = len(val_images)
+
+    print('train: %d, validation: %d' %(total_train, total_val))
+    steps_per_epoch = total_train // cfg.BATCH_SIZE
+    print('steps_per_epoch', steps_per_epoch)
+
+    kl.train(train_gen, 
+        val_gen, 
+        saved_model_path=model_path,
+        steps=steps_per_epoch,
+        train_split=cfg.TRAIN_TEST_SPLIT)
 
 
 if __name__ == '__main__':
@@ -374,6 +517,11 @@ if __name__ == '__main__':
         tub = args['--tub']
         model = args['--model']
         plot_predictions(cfg, tub, model)
+
+    elif args['custom_train']:
+        tub = args['--tub']
+        model = args['--model']
+        custom_train(cfg, tub, model)
 
 
 
