@@ -292,15 +292,20 @@ def anaylze(cfg, tub_names, op, record):
     look at the tub data and produce some analysis, for example:
     manage.py analyze --tub=<tub1,tub2,..tubn> --op=histogram --rec="user/angle"
     '''
+    import json
+    import glob
+
     tubs = gather_tubs(cfg, tub_names)
 
     if op == 'histogram':
         import matplotlib.pyplot as plt
         samples = []
         for tub in tubs:
-            num_records = tub.get_num_records()
-            for iRec in range(0, num_records):
-                json_data = tub.get_json_record(iRec)
+            record_paths = glob.glob(os.path.join(tub.path, 'record_*.json'))
+            
+            for record_path in record_paths:
+                with open(record_path, 'r') as fp:
+                    json_data = json.load(fp)
                 sample = json_data[record]
                 samples.append(float(sample))
 
