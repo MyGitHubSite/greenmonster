@@ -170,24 +170,24 @@ def drive(cfg, model_path=None, use_joystick=False):
         if (cfg.DEBUG):
             string = "Mode: " + mode
 
-            if mode == 'user' or model_path is None:
-                string += "\nAngle: " + round(user_angle, 2)
-                string += " | Throttle: " + round(user_throttle, 2)
+            if mode == 'user'
+                string += "\nAngle: " + str(round(user_angle, 2))
+                string += " | Throttle: " + str(round(user_throttle, 2))
 
             elif mode == 'local_angle':
-                string += "\nAngle: " + round(pilot_angle, 2)
-                string += " | Throttle: " + round(user_throttle, 2)
+                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Throttle: " + str(round(user_throttle, 2))
             
             else:
-                string += "\nAngle: " + round(pilot_angle, 2)
-                string += " | Throttle: " + round(pilot_throttle, 2)
+                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Throttle: " + str(round(pilot_throttle, 2))
 
-            string += "\nDistance: " + round(distance, 4) + " m"
-            string += " | Velocity: " + round(velocity, 4) + " m/s"
+            string += "\nDistance: " + str(round(distance, 4)) + " m"
+            string += " | Velocity: " + str(round(velocity, 4)) + " m/s"
 
-            string += "\nTarget T: " + round(target_throttle, 2)
-            string += " | Measured T: " + round(measured_throttle, 2)
-            string += " | PID T: " + round(pid_throttle, 4)
+            string += "\nTarget T: " + str(round(target_throttle, 2))
+            string += " | Measured T: " + str(round(measured_throttle, 2))
+            string += " | PID T: " + str(round(pid_throttle, 4))
 
             sys.stdout.write(string)
             sys.stdout.flush()
