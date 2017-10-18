@@ -80,12 +80,9 @@ def drive(cfg, model_path=None, use_joystick=False):
             return user_angle, user_throttle
         
         elif mode == 'local_angle':
-            print("pilot_angle:", pilot_angle)
             return pilot_angle, user_throttle
         
         else:
-            print("pilot_angle:", pilot_angle)
-            print("pilot_throttle:", pilot_throttle)
             return pilot_angle, pilot_throttle
         
     drive_mode_part = dk.parts.Lambda(drive_mode)
@@ -109,10 +106,6 @@ def drive(cfg, model_path=None, use_joystick=False):
 
       measured_throttle = (current_velocity/max_velocity)*direction
       
-      if target_throttle != 0.0:
-        print("measured_throttle:", measured_throttle)
-        print("target_throttle:", target_throttle)
-
       return measured_throttle
 
     velocity_to_throttle_part = dk.parts.Lambda(velocity_to_throttle)
@@ -134,9 +127,6 @@ def drive(cfg, model_path=None, use_joystick=False):
         pid_throttle = 1.0
       elif pid_throttle < -1.0:
         pid_throttle = -1.0
-
-      if pid_throttle != 0.0:
-        print("pid_throttle:", pid_throttle)
 
       return pid_throttle
 
@@ -174,6 +164,41 @@ def drive(cfg, model_path=None, use_joystick=False):
     #raw throttle value from the user or pilot
     V.add(throttle, inputs=['throttle'])
     
+    def console_output(mode, user_angle, user_throttle, pilot_angle, pilot_throttle, 
+                       distance, velocity, 
+                       target_throttle, measured_throttle, pid_throttle):
+        if (cfg.DEBUG):
+            string = "Mode: " + user_mode
+
+            if mode == 'user' or model_path is None:
+                string += "\nAngle: " + round(user_angle, 2)
+                string += " | Throttle: " + round(user_throttle, 2)
+
+            elif mode == 'local_angle':
+                string += "\nAngle: " + round(pilot_angle, 2)
+                string += " | Throttle: " + round(user_throttle, 2)
+            
+            else:
+                string += "\nAngle: " + round(pilot_angle, 2)
+                string += " | Throttle: " + round(pilot_throttle, 2)
+
+            string += "\nDistance: " + round(distance, 4) + " m"
+            string += " | Velocity: " + round(velocity, 4) + " m/s"
+
+            string += "\nTarget T: " + round(target_throttle, 2)
+            string += " | Measured T: " + round(measured_throttle, 2)
+            string += " | PID T: " + round(pid_throttle, 4)
+
+            sys.stdout.write(string)
+            sys.stdout.flush()
+
+    console_output_part = dk.parts.Lambda(console_output)
+    V.add(console_output_part,
+            inputs=['user/mode', 'user/angle', 'user/throttle',
+                    'pilot/angle', 'pilot/throttle', 
+                    'odometer/meters', 'odometer/meters_per_second',
+                    'target_throttle', 'measured_throttle', 'pid_throttle'])
+
     #add tub to save data
     inputs=['cam/image_array',
             'user/angle', 'user/throttle', 
@@ -452,11 +477,11 @@ def custom_train(cfg, tub_names, model_name):
                     augmented_angles.append(angle)
                     augmented_throttles.append(throttle)
 
-                    if (angle[7] != 1.0):
-                        #augment the data set with flipped versions of the nonzero angle records
-                        augmented_images.append(np.fliplr(image))
-                        augmented_angles.append(np.flip(angle, axis=0))
-                        augmented_throttles.append(throttle)
+                    # if (angle[7] != 1.0):
+                    #     #augment the data set with flipped versions of the nonzero angle records
+                    #     augmented_images.append(np.fliplr(image))
+                    #     augmented_angles.append(np.flip(angle, axis=0))
+                    #     augmented_throttles.append(throttle)
 
                 augmented_images = np.array(augmented_images)
                 augmented_angles =  np.array(augmented_angles)
