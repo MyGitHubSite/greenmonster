@@ -168,7 +168,7 @@ def drive(cfg, model_path=None, use_joystick=False):
                        distance, velocity, 
                        target_throttle, measured_throttle, pid_throttle):
         if (cfg.DEBUG):
-            string = "Mode: " + user_mode
+            string = "Mode: " + user
 
             if mode == 'user' or model_path is None:
                 string += "\nAngle: " + round(user_angle, 2)
