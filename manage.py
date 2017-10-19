@@ -23,11 +23,10 @@ import os
 from docopt import docopt
 import donkeycar as dk
 import pdb
-
+import sys
 
 def drive(cfg, model_path=None, use_joystick=False):
-    import sys
-    
+
     #Initialized car
     V = dk.vehicle.Vehicle()
     cam = dk.parts.PiCamera(resolution=cfg.CAMERA_RESOLUTION)
@@ -173,7 +172,7 @@ def drive(cfg, model_path=None, use_joystick=False):
         if (cfg.DEBUG):
             string = "Mode: " + mode
 
-            if mode == 'user':1
+            if mode == 'user':
                 string += "\nAngle: " + str(round(user_angle, 2))
                 string += " | Throttle: " + str(round(user_throttle, 2))
 
