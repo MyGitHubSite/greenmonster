@@ -190,8 +190,9 @@ def drive(cfg, model_path=None, use_joystick=False):
             string += "\nTarget T: " + str(round(target_throttle, 2))
             string += " | Measured T: " + str(round(measured_throttle, 2))
             string += " | PID T: " + str(round(pid_throttle, 4))
+            string += "\r"
 
-            sys.stdout.write(string)
+            print(string, end='\r')
             sys.stdout.flush()
 
     console_output_part = dk.parts.Lambda(console_output)
