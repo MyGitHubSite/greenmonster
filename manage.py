@@ -169,29 +169,27 @@ def drive(cfg, model_path=None, use_joystick=False):
     def console_output(mode, user_angle, user_throttle, pilot_angle, pilot_throttle, 
                        distance, velocity, 
                        target_throttle, measured_throttle, pid_throttle):
-        if (cfg.DEBUG):
+        if (cfg.DEBUG and user_throttle != 0.0):
+            string = ""
 
-            if user_throttle != 0.0: 
-                string = ""
+            if mode == 'user':
+                string += "\nAngle: " + str(round(user_angle, 2))
+                string += " | Throttle: " + str(round(user_throttle, 2))
 
-                if mode == 'user':
-                    string += "\nAngle: " + str(round(user_angle, 2))
-                    string += " | Throttle: " + str(round(user_throttle, 2))
+            elif mode == 'local_angle':
+                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Throttle: " + str(round(user_throttle, 2))
+            
+            else:
+                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Throttle: " + str(round(pilot_throttle, 2))
 
-                elif mode == 'local_angle':
-                    string += "\nAngle: " + str(round(pilot_angle, 2))
-                    string += " | Throttle: " + str(round(user_throttle, 2))
-                
-                else:
-                    string += "\nAngle: " + str(round(pilot_angle, 2))
-                    string += " | Throttle: " + str(round(pilot_throttle, 2))
+            string += "\nDistance: " + str(round(distance, 4)) + " m"
+            string += " | Velocity: " + str(round(velocity, 4)) + " m/s"
 
-                string += "\nDistance: " + str(round(distance, 4)) + " m"
-                string += " | Velocity: " + str(round(velocity, 4)) + " m/s"
-
-                string += "\nTarget T: " + str(round(target_throttle, 2))
-                string += " | Measured T: " + str(round(measured_throttle, 2))
-                string += " | PID T: " + str(round(pid_throttle, 4))
+            string += "\nTarget T: " + str(round(target_throttle, 2))
+            string += " | Measured T: " + str(round(measured_throttle, 2))
+            string += " | PID T: " + str(round(pid_throttle, 4))
 
             print(string, end="\r")
             sys.stdout.flush()
