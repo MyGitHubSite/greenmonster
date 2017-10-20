@@ -172,27 +172,27 @@ def drive(cfg, model_path=None, use_joystick=False):
         if (cfg.DEBUG):
             string = "Mode: " + mode
 
-            if user_throttle > 0: 
+            if user_throttle != 0.0: 
                 if mode == 'user':
-                    string += " | Angle: " + str(round(user_angle, 2))
+                    string += "\nAngle: " + str(round(user_angle, 2))
                     string += " | Throttle: " + str(round(user_throttle, 2))
 
                 elif mode == 'local_angle':
-                    string += " | Angle: " + str(round(pilot_angle, 2))
+                    string += "\nAngle: " + str(round(pilot_angle, 2))
                     string += " | Throttle: " + str(round(user_throttle, 2))
                 
                 else:
-                    string += " | Angle: " + str(round(pilot_angle, 2))
+                    string += "\nAngle: " + str(round(pilot_angle, 2))
                     string += " | Throttle: " + str(round(pilot_throttle, 2))
 
-                string += "\n | Distance: " + str(round(distance, 4)) + " m"
+                string += "\nDistance: " + str(round(distance, 4)) + " m"
                 string += " | Velocity: " + str(round(velocity, 4)) + " m/s"
 
-                string += "\n | Target T: " + str(round(target_throttle, 2))
+                string += "\nTarget T: " + str(round(target_throttle, 2))
                 string += " | Measured T: " + str(round(measured_throttle, 2))
                 string += " | PID T: " + str(round(pid_throttle, 4))
 
-            print(string, end='\r')
+            print(string)
             sys.stdout.flush()
 
     console_output_part = dk.parts.Lambda(console_output)
