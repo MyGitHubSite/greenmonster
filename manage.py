@@ -173,24 +173,23 @@ def drive(cfg, model_path=None, use_joystick=False):
             string = "Mode: " + mode
 
             if mode == 'user':
-                string += "\nAngle: " + str(round(user_angle, 2))
+                string += " | Angle: " + str(round(user_angle, 2))
                 string += " | Throttle: " + str(round(user_throttle, 2))
 
             elif mode == 'local_angle':
-                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Angle: " + str(round(pilot_angle, 2))
                 string += " | Throttle: " + str(round(user_throttle, 2))
             
             else:
-                string += "\nAngle: " + str(round(pilot_angle, 2))
+                string += " | Angle: " + str(round(pilot_angle, 2))
                 string += " | Throttle: " + str(round(pilot_throttle, 2))
 
-            string += "\nDistance: " + str(round(distance, 4)) + " m"
+            string += " | Distance: " + str(round(distance, 4)) + " m"
             string += " | Velocity: " + str(round(velocity, 4)) + " m/s"
 
-            string += "\nTarget T: " + str(round(target_throttle, 2))
+            string += " | Target T: " + str(round(target_throttle, 2))
             string += " | Measured T: " + str(round(measured_throttle, 2))
             string += " | PID T: " + str(round(pid_throttle, 4))
-            string += "\r"
 
             print(string, end='\r')
             sys.stdout.flush()
@@ -437,8 +436,8 @@ def custom_train(cfg, tub_names, model_name):
                 json_data = json.load(fp)
 
             user_angle = dk.utils.linear_bin(json_data['user/angle'])
-            user_throttle = float(json_data["user/throttle"])
-            image_filename = json_data["cam/image_array"]
+            user_throttle = dk.utils.linear_bin(json_data['user/throttle'])
+            image_filename = json_data['cam/image_array']
             image_path = os.path.join(tub.path, image_filename)
             
             if (user_angle[7] != 1.0):
@@ -476,15 +475,16 @@ def custom_train(cfg, tub_names, model_name):
                 for image_path, angle, throttle in zip(batch_images, batch_angles, batch_throttles):
                     image = Image.open(image_path)
                     image = np.array(image)
+                    image = image[45:,:]
                     augmented_images.append(image)
                     augmented_angles.append(angle)
                     augmented_throttles.append(throttle)
 
-                    # if (angle[7] != 1.0):
-                    #     #augment the data set with flipped versions of the nonzero angle records
-                    #     augmented_images.append(np.fliplr(image))
-                    #     augmented_angles.append(np.flip(angle, axis=0))
-                    #     augmented_throttles.append(throttle)
+                    if (angle[7] != 1.0):
+                        #augment the data set with flipped versions of the nonzero angle records
+                        augmented_images.append(np.fliplr(image))
+                        augmented_angles.append(np.flip(angle, axis=0))
+                        augmented_throttles.append(np.flip(throttle, axis=0))
 
                 augmented_images = np.array(augmented_images)
                 augmented_angles =  np.array(augmented_angles)
@@ -500,7 +500,7 @@ def custom_train(cfg, tub_names, model_name):
     train_gen = generator(train_images, train_angles, train_throttles)
     val_gen = generator(val_images, val_angles, val_throttles)
 
-    kl = dk.parts.KerasCategorical()
+    kl = dk.parts.AlanCategorical()
     
     tubs = gather_tubs(cfg, tub_names)
     model_path = os.path.expanduser(model_name)
@@ -555,7 +555,3 @@ if __name__ == '__main__':
         tub = args['--tub']
         model = args['--model']
         custom_train(cfg, tub, model)
-
-
-
-
