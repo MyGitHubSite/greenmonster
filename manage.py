@@ -170,7 +170,6 @@ def drive(cfg, model_path=None, use_joystick=False):
                        distance, velocity, 
                        target_throttle, measured_throttle, pid_throttle):
         if (cfg.DEBUG):
-            string = "Mode: " + mode
 
             if user_throttle != 0.0: 
                 if mode == 'user':
@@ -192,7 +191,7 @@ def drive(cfg, model_path=None, use_joystick=False):
                 string += " | Measured T: " + str(round(measured_throttle, 2))
                 string += " | PID T: " + str(round(pid_throttle, 4))
 
-            print(string)
+            print(string, end="\r")
             sys.stdout.flush()
 
     console_output_part = dk.parts.Lambda(console_output)
@@ -376,6 +375,7 @@ def plot_predictions(cfg, tub_names, model_name):
             image_path = os.path.join(tub.path, image_filename)
             img = Image.open(image_path)
             img = np.array(img)
+            img = img[45:,:]
 
             binned_angle = dk.utils.linear_bin(json_data['user/angle'])
             user_angle_binned = dk.utils.linear_unbin(binned_angle)
