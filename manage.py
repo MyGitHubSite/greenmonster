@@ -172,6 +172,8 @@ def drive(cfg, model_path=None, use_joystick=False):
         if (cfg.DEBUG):
 
             if user_throttle != 0.0: 
+                string = ""
+
                 if mode == 'user':
                     string += "\nAngle: " + str(round(user_angle, 2))
                     string += " | Throttle: " + str(round(user_throttle, 2))
