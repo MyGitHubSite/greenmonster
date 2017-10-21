@@ -65,7 +65,7 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(pilot_condition_part, inputs=['user/mode'], outputs=['run_pilot'])
     
     #Run the pilot if the mode is not user.
-    kl = dk.parts.AlanCategorical()
+    kl = dk.parts.KerasLinear(num_outputs=2)
     if model_path:
         kl.load(model_path)
     
@@ -126,16 +126,16 @@ def drive(cfg, model_path=None, use_joystick=False):
           run_condition='run_pilot')
 
 
-    def scale_throttle(throttle, user_throttle, angle):
-        throttle = throttle * (1.0 - (abs(angle) * .6))
-        throttle = min(throttle, user_throttle)
-        return throttle
+    # def scale_throttle(throttle, user_throttle, angle):
+    #     throttle = throttle * (1.0 - (abs(angle) * .6))
+    #     throttle = min(throttle, user_throttle)
+    #     return throttle
 
-    scale_throttle_part = dk.parts.Lambda(scale_throttle)
-    V.add(scale_throttle_part,
-          inputs=['target_throttle', 'user/throttle', 'angle'],
-          outputs=['target_throttle'],
-          run_condition='run_pilot')
+    # scale_throttle_part = dk.parts.Lambda(scale_throttle)
+    # V.add(scale_throttle_part,
+    #       inputs=['target_throttle', 'user/throttle', 'angle'],
+    #       outputs=['target_throttle'],
+    #       run_condition='run_pilot')
 
     #Transform the velocity measured by the odometer into -1/1 scale
     #so existing controls and modelsbased on -1/1 range can still be used
