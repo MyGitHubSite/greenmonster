@@ -137,18 +137,6 @@ def drive(cfg, model_path=None, use_joystick=False):
           inputs=['target_throttle','pid/output'],
           outputs=['pid_throttle'])
 
-    
-    def multiply_angle(angle):
-        angle = angle*1.2
-        return angle
-
-    multiply_angle_part = dk.parts.Lambda(multiply_angle)
-
-    V.add(multiply_angle_part,
-          inputs=['angle'],
-          outputs=['angle'],
-          run_condition='run_pilot')
-
     class SmoothAngle:
         """
         Wraps a function into a donkey part.
