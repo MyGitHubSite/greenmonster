@@ -65,7 +65,7 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(pilot_condition_part, inputs=['user/mode'], outputs=['run_pilot'])
     
     #Run the pilot if the mode is not user.
-    kl = dk.parts.KerasCategorical()
+    kl = dk.parts.AlanCategorical()
     if model_path:
         kl.load(model_path)
     
@@ -95,6 +95,47 @@ def drive(cfg, model_path=None, use_joystick=False):
     
     odometer = dk.parts.RotaryEncoder(mm_per_tick=cfg.ROTARY_ENCODER_MM_PER_TICK, pin=cfg.ROTARY_ENCODER_PIN)
     V.add(odometer, outputs=['odometer/meters', 'odometer/meters_per_second'], threaded=True)
+
+
+    class SmoothAngle:
+        """
+        Wraps a function into a donkey part.
+        """
+        def __init__(self, factor=2):
+
+            """
+            Accepts the function to use.
+            """
+            self.factor = factor
+            self.last = 0.0
+        
+
+        def run(self, current):
+            new = (current*self.factor+self.last)/(self.factor+1)
+            self.last = new
+            return new
+
+        def shutdown(self):
+            return
+
+    smooth_angle_part = SmoothAngle(factor=3)
+
+    V.add(smooth_angle_part,
+          inputs=['angle'],
+          outputs=['angle'],
+          run_condition='run_pilot')
+
+
+    def scale_throttle(throttle, user_throttle, angle):
+        throttle = throttle * (1.0 - (abs(angle) * .6))
+        throttle = min(throttle, user_throttle)
+        return throttle
+
+    scale_throttle_part = dk.parts.Lambda(scale_throttle)
+    V.add(scale_throttle_part,
+          inputs=['target_throttle', 'user/throttle', 'angle'],
+          outputs=['target_throttle'],
+          run_condition='run_pilot')
 
     #Transform the velocity measured by the odometer into -1/1 scale
     #so existing controls and modelsbased on -1/1 range can still be used
@@ -136,35 +177,6 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(throttle_with_pid_part,
           inputs=['target_throttle','pid/output'],
           outputs=['pid_throttle'])
-
-    class SmoothAngle:
-        """
-        Wraps a function into a donkey part.
-        """
-        def __init__(self, factor=2):
-
-            """
-            Accepts the function to use.
-            """
-            self.factor = factor
-            self.last = 0.0
-        
-
-        def run(self, current):
-            new = (current*self.factor+self.last)/(self.factor+1)
-            self.last = new
-            return new
-
-        def shutdown(self):
-            return
-
-    smooth_angle_part = SmoothAngle(factor=3)
-
-    V.add(smooth_angle_part,
-          inputs=['angle'],
-          outputs=['angle'],
-          run_condition='run_pilot')
-
 
     steering_controller = dk.parts.PCA9685(cfg.STEERING_CHANNEL)
     steering = dk.parts.PWMSteering(controller=steering_controller,
