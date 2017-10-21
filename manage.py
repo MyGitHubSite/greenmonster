@@ -65,7 +65,7 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(pilot_condition_part, inputs=['user/mode'], outputs=['run_pilot'])
     
     #Run the pilot if the mode is not user.
-    kl = dk.parts.KerasCategorical()
+    kl = dk.parts.AlanCategorical()
     if model_path:
         kl.load(model_path)
     
