@@ -137,6 +137,47 @@ def drive(cfg, model_path=None, use_joystick=False):
           inputs=['target_throttle','pid/output'],
           outputs=['pid_throttle'])
 
+    
+    def multiply_angle(angle):
+        angle = angle*1.2
+        return angle
+
+    multiply_angle_part = dk.parts.Lambda(multiply_angle)
+
+    V.add(multiply_angle_part,
+          inputs=['angle'],
+          outputs=['angle'],
+          run_condition='run_pilot')
+
+    class SmoothAngle:
+        """
+        Wraps a function into a donkey part.
+        """
+        def __init__(self, factor=2):
+
+            """
+            Accepts the function to use.
+            """
+            self.factor = factor
+            self.last = 0.0
+        
+
+        def run(self, current):
+            new = (current*self.factor+self.last)/(self.factor+1)
+            self.last = new
+            return new
+
+        def shutdown(self):
+            return
+
+    smooth_angle_part = SmoothAngle(factor=3)
+
+    V.add(smooth_angle_part,
+          inputs=['angle'],
+          outputs=['angle'],
+          run_condition='run_pilot')
+
+
     steering_controller = dk.parts.PCA9685(cfg.STEERING_CHANNEL)
     steering = dk.parts.PWMSteering(controller=steering_controller,
                                     left_pulse=cfg.STEERING_LEFT_PWM, 
