@@ -355,7 +355,7 @@ def plot_predictions(cfg, tub_names, model_name):
     tubs = gather_tubs(cfg, tub_names)
     
     model_path = os.path.expanduser(model_name)
-    model = dk.parts.KerasCategorical()
+    model = dk.parts.AlanCategorical()
     model.load(model_path)
 
     user_angles = []
@@ -375,7 +375,6 @@ def plot_predictions(cfg, tub_names, model_name):
             image_path = os.path.join(tub.path, image_filename)
             img = Image.open(image_path)
             img = np.array(img)
-            img = img[45:,:]
 
             binned_angle = dk.utils.linear_bin(json_data['user/angle'])
             user_angle_binned = dk.utils.linear_unbin(binned_angle)
@@ -446,7 +445,7 @@ def custom_train(cfg, tub_names, model_name):
                 images.append(image_path)
                 angles.append(user_angle)
                 throttles.append(user_throttle)
-            elif (random.randint(0, 9) < 10):
+            elif (random.randint(0, 9) < 3):
                 #Drop a percentage of records where categorical angle is in the 0 bucket
                 #increase the number in the conditional above to include more records
                 #(< 2 = 20% of 0 angle records included, < 3 = 30% of 0 angle records included, etc.)
