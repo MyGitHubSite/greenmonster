@@ -65,7 +65,7 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(pilot_condition_part, inputs=['user/mode'], outputs=['run_pilot'])
     
     #Run the pilot if the mode is not user.
-    kl = dk.parts.KerasLinear(num_outputs=2)
+    kl = dk.parts.KerasCategoricalCropped
     if model_path:
         kl.load(model_path)
     
@@ -97,45 +97,48 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(odometer, outputs=['odometer/meters', 'odometer/meters_per_second'], threaded=True)
 
 
-    class SmoothAngle:
-        """
-        Wraps a function into a donkey part.
-        """
-        def __init__(self, factor=2):
-
+    if cfg.SMOOTH_ANGLE:
+        class SmoothAngle:
             """
-            Accepts the function to use.
+            Wraps a function into a donkey part.
             """
-            self.factor = factor
-            self.last = 0.0
-        
+            def __init__(self, factor=2):
 
-        def run(self, current):
-            new = (current*self.factor+self.last)/(self.factor+1)
-            self.last = new
-            return new
+                """
+                Accepts the function to use.
+                """
+                self.factor = factor
+                self.last = 0.0
+            
 
-        def shutdown(self):
-            return
+            def run(self, current):
+                new = (current*self.factor+self.last)/(self.factor+1)
+                self.last = new
+                return new
 
-    smooth_angle_part = SmoothAngle(factor=3)
+            def shutdown(self):
+                return
 
-    V.add(smooth_angle_part,
-          inputs=['angle'],
-          outputs=['angle'],
-          run_condition='run_pilot')
+        smooth_angle_part = SmoothAngle(factor=cfg.SMOOTH_ANGLE_FACTOR)
+
+        V.add(smooth_angle_part,
+              inputs=['angle'],
+              outputs=['angle'],
+              run_condition='run_pilot')
 
 
-    # def scale_throttle(throttle, user_throttle, angle):
-    #     throttle = throttle * (1.0 - (abs(angle) * .6))
-    #     throttle = min(throttle, user_throttle)
-    #     return throttle
+    if cfg.THROTTLE_FROM_ANGLE:
+        def scale_throttle(throttle, user_throttle, angle):
+            throttle = throttle * (1.0 - (abs(angle) * .6))
+            throttle = min(throttle, user_throttle)
+            throttle = max(0.15, throttle)
+            return throttle
 
-    # scale_throttle_part = dk.parts.Lambda(scale_throttle)
-    # V.add(scale_throttle_part,
-    #       inputs=['target_throttle', 'user/throttle', 'angle'],
-    #       outputs=['target_throttle'],
-    #       run_condition='run_pilot')
+        scale_throttle_part = dk.parts.Lambda(scale_throttle)
+        V.add(scale_throttle_part,
+              inputs=['target_throttle', 'user/throttle', 'angle'],
+              outputs=['target_throttle'],
+              run_condition='run_pilot')
 
     #Transform the velocity measured by the odometer into -1/1 scale
     #so existing controls and modelsbased on -1/1 range can still be used
@@ -477,7 +480,7 @@ def custom_train(cfg, tub_names, model_name):
                 json_data = json.load(fp)
 
             user_angle = dk.utils.linear_bin(json_data['user/angle'])
-            user_throttle = dk.utils.linear_bin(json_data['user/throttle'])
+            user_throttle = float(json_data['user/throttle'])
             image_filename = json_data['cam/image_array']
             image_path = os.path.join(tub.path, image_filename)
             
@@ -486,7 +489,7 @@ def custom_train(cfg, tub_names, model_name):
                 images.append(image_path)
                 angles.append(user_angle)
                 throttles.append(user_throttle)
-            elif (random.randint(0, 9) < 3):
+            elif (random.randint(0, 9) < 5):
                 #Drop a percentage of records where categorical angle is in the 0 bucket
                 #increase the number in the conditional above to include more records
                 #(< 2 = 20% of 0 angle records included, < 3 = 30% of 0 angle records included, etc.)
@@ -516,7 +519,7 @@ def custom_train(cfg, tub_names, model_name):
                 for image_path, angle, throttle in zip(batch_images, batch_angles, batch_throttles):
                     image = Image.open(image_path)
                     image = np.array(image)
-                    image = image[45:,:]
+                    image = image[60:,:]
                     augmented_images.append(image)
                     augmented_angles.append(angle)
                     augmented_throttles.append(throttle)
@@ -525,7 +528,7 @@ def custom_train(cfg, tub_names, model_name):
                         #augment the data set with flipped versions of the nonzero angle records
                         augmented_images.append(np.fliplr(image))
                         augmented_angles.append(np.flip(angle, axis=0))
-                        augmented_throttles.append(np.flip(throttle, axis=0))
+                        augmented_throttles.append(throttle)
 
                 augmented_images = np.array(augmented_images)
                 augmented_angles =  np.array(augmented_angles)
@@ -541,7 +544,7 @@ def custom_train(cfg, tub_names, model_name):
     train_gen = generator(train_images, train_angles, train_throttles)
     val_gen = generator(val_images, val_angles, val_throttles)
 
-    kl = dk.parts.AlanCategorical()
+    kl = dk.parts.KerasCategoricalCropped()
     
     tubs = gather_tubs(cfg, tub_names)
     model_path = os.path.expanduser(model_name)
