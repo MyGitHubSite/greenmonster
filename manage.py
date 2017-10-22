@@ -67,13 +67,13 @@ def drive(cfg, model_path=None, use_joystick=False):
     #Run the pilot if the mode is not user.
 
     if cfg.MODEL_CLASS == "KerasLinear":
-        kl = dk.parts.KerasLinear
+        kl = dk.parts.KerasLinear()
     elif cfg.MODEL_CLASS == "KerasCategoricalCropped":
-        kl = dk.parts.KerasCategoricalCropped
+        kl = dk.parts.KerasCategoricalCropped()
     elif cfg.MODEL_CLASS == "CommaLinear":
-        kl = dk.parts.CommaLinear
+        kl = dk.parts.CommaLinear()
     else:
-        kl = dk.parts.KerasCategorical 
+        kl = dk.parts.KerasCategorical()
 
     if model_path:
         kl.load(model_path)
