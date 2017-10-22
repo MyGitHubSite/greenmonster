@@ -65,7 +65,16 @@ def drive(cfg, model_path=None, use_joystick=False):
     V.add(pilot_condition_part, inputs=['user/mode'], outputs=['run_pilot'])
     
     #Run the pilot if the mode is not user.
-    kl = dk.parts.KerasCategoricalCropped
+
+    if cfg.MODEL_CLASS == "KerasLinear":
+        kl = dk.parts.KerasLinear
+    elif cfg.MODEL_CLASS == "KerasCategoricalCropped":
+        kl = dk.parts.KerasCategoricalCropped
+    elif cfg.MODEL_CLASS == "CommaLinear":
+        kl = dk.parts.CommaLinear
+    else:
+        kl = dk.parts.KerasCategorical 
+
     if model_path:
         kl.load(model_path)
     
@@ -479,17 +488,18 @@ def custom_train(cfg, tub_names, model_name):
             with open(record_path, 'r') as fp:
                 json_data = json.load(fp)
 
-            user_angle = dk.utils.linear_bin(json_data['user/angle'])
+            #user_angle = dk.utils.linear_bin(json_data['user/angle'])
+            user_angle = float(json_data['user/angle'])
             user_throttle = float(json_data['user/throttle'])
             image_filename = json_data['cam/image_array']
             image_path = os.path.join(tub.path, image_filename)
             
-            if (user_angle[7] != 1.0):
+            if (user_angle != 0.0):
                 #if the categorical angle is not in the 0 bucket, always include it
                 images.append(image_path)
                 angles.append(user_angle)
                 throttles.append(user_throttle)
-            elif (random.randint(0, 9) < 5):
+            elif (random.randint(0, 9) < 10):
                 #Drop a percentage of records where categorical angle is in the 0 bucket
                 #increase the number in the conditional above to include more records
                 #(< 2 = 20% of 0 angle records included, < 3 = 30% of 0 angle records included, etc.)
@@ -519,15 +529,16 @@ def custom_train(cfg, tub_names, model_name):
                 for image_path, angle, throttle in zip(batch_images, batch_angles, batch_throttles):
                     image = Image.open(image_path)
                     image = np.array(image)
-                    image = image[60:,:]
+                    #image = image[60:,:]
                     augmented_images.append(image)
                     augmented_angles.append(angle)
                     augmented_throttles.append(throttle)
 
-                    if (angle[7] != 1.0):
+                    if (angle != 0.0):
                         #augment the data set with flipped versions of the nonzero angle records
                         augmented_images.append(np.fliplr(image))
-                        augmented_angles.append(np.flip(angle, axis=0))
+                        #augmented_angles.append(np.flip(angle, axis=0))
+                        augmented_angles.append(-angle)
                         augmented_throttles.append(throttle)
 
                 augmented_images = np.array(augmented_images)
@@ -537,14 +548,15 @@ def custom_train(cfg, tub_names, model_name):
                 shuffle(augmented_images, augmented_angles, augmented_throttles)
 
                 X = [augmented_images]
-                y = [augmented_angles, augmented_throttles]
+                #y = [augmented_angles, augmented_throttles]
+                y = [augmented_angles]
 
                 yield X, y
 
     train_gen = generator(train_images, train_angles, train_throttles)
     val_gen = generator(val_images, val_angles, val_throttles)
 
-    kl = dk.parts.KerasCategoricalCropped()
+    kl = dk.parts.CommaLinear()
     
     tubs = gather_tubs(cfg, tub_names)
     model_path = os.path.expanduser(model_name)
