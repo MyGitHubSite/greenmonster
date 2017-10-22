@@ -408,7 +408,7 @@ def plot_predictions(cfg, tub_names, model_name):
     tubs = gather_tubs(cfg, tub_names)
     
     model_path = os.path.expanduser(model_name)
-    model = dk.parts.AlanCategorical()
+    model = dk.parts.CommaLinear()
     model.load(model_path)
 
     user_angles = []
@@ -506,6 +506,12 @@ def custom_train(cfg, tub_names, model_name):
                 images.append(image_path)
                 angles.append(user_angle)
                 throttles.append(user_throttle)
+
+    # smooth steering angles by calculating a rolling average over N frames
+    window = 3
+    angles = np.convolve(angles, np.ones((window,))/window, mode='valid')
+    images = images[:-(window-1)]
+    throttles = throttles[:-(window-1)]
 
     #shuffle and split the data
     train_images, val_images, train_angles, val_angles, train_throttles, val_throttles = train_test_split(images, angles, throttles, shuffle=True, test_size=(1 - cfg.TRAIN_TEST_SPLIT))
